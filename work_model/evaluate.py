@@ -20,8 +20,8 @@ except ModuleNotFoundError as exc:  # pragma: no cover
     ) from exc
 
 from env import load_split
-from DQN.agent import DQNAgent
-from DQN.train import evaluate_policy, maybe_limit
+from work_model.agent import DQNAgent
+from work_model.train import evaluate_policy, maybe_limit
 
 
 def main() -> None:
