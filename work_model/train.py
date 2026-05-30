@@ -26,8 +26,8 @@ except ModuleNotFoundError as exc:  # pragma: no cover - user environment guard
     ) from exc
 
 from env import CrowdRecEnv, load_split
-from DQN.agent import DQNAgent, make_agent_config
-from DQN.metrics import MetricLogger
+from work_model.agent import DQNAgent, make_agent_config
+from work_model.metrics import MetricLogger
 
 
 def set_seed(seed: int) -> None:
@@ -59,6 +59,9 @@ def evaluate_policy(
     done = False
     total_reward = 0.0
     hits = 0
+    top_k_hits = 0
+    quality_sum = 0.0
+    quality_count = 0
     invalid = 0
     steps = 0
 
@@ -67,6 +70,10 @@ def evaluate_policy(
         next_state, reward, done, info = env.step(action)
         total_reward += reward
         hits += int(info["hit"])
+        top_k_hits += int(info["top_k_hit"])
+        if info["chosen_popularity_rank"] is not None:
+            quality_sum += info["chosen_popularity_rank"]
+            quality_count += 1
         invalid += int(not info["valid_action"])
         steps += 1
         if max_steps is not None and steps >= max_steps:
@@ -78,6 +85,8 @@ def evaluate_policy(
         "eval_steps": float(steps),
         "eval_avg_reward": total_reward / steps if steps else 0.0,
         "eval_hit_rate": hits / steps if steps else 0.0,
+        "eval_top3_hit_rate": top_k_hits / steps if steps else 0.0,
+        "eval_avg_popularity_rank": quality_sum / quality_count if quality_count else 0.0,
         "eval_invalid_action_rate": invalid / steps if steps else 0.0,
     }
 
@@ -143,6 +152,9 @@ def train_one_run(args: argparse.Namespace) -> dict[str, Any]:
         done = False
         total_reward = 0.0
         hits = 0
+        top_k_hits = 0
+        quality_sum = 0.0
+        quality_count = 0
         invalid = 0
         losses: list[float] = []
         steps = 0
@@ -164,9 +176,24 @@ def train_one_run(args: argparse.Namespace) -> dict[str, Any]:
 
             total_reward += reward
             hits += int(info["hit"])
+            top_k_hits += int(info["top_k_hit"])
+            if info["chosen_popularity_rank"] is not None:
+                quality_sum += info["chosen_popularity_rank"]
+                quality_count += 1
             invalid += int(not info["valid_action"])
             steps += 1
             global_step += 1
+
+            if (
+                args.log_interval > 0
+                and global_step % args.log_interval == 0
+            ):
+                step_loss = losses[-1] if losses else float("nan")
+                print(
+                    f"  step={global_step:>7d}  ep={epoch}  "
+                    f"hit={info['hit']:d}  reward={reward:.4f}  "
+                    f"loss={step_loss:.4f}  eps={agent.epsilon:.3f}"
+                )
 
             if args.max_steps_per_epoch is not None and steps >= args.max_steps_per_epoch:
                 break
@@ -187,6 +214,8 @@ def train_one_run(args: argparse.Namespace) -> dict[str, Any]:
             "epsilon": agent.epsilon,
             "train_avg_reward": total_reward / steps if steps else 0.0,
             "train_hit_rate": hits / steps if steps else 0.0,
+            "train_top3_hit_rate": top_k_hits / steps if steps else 0.0,
+            "train_avg_popularity_rank": quality_sum / quality_count if quality_count else 0.0,
             "train_invalid_action_rate": invalid / steps if steps else 0.0,
             "loss": float(np.mean(losses)) if losses else 0.0,
             **eval_stats,
@@ -249,8 +278,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-eval-steps", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--output-dir", default="DQN/runs")
+    parser.add_argument("--output-dir", default="work_model/runs")
     parser.add_argument("--run-name", default="")
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=0,
+        help="每隔多少步打印一次步级指标（0=不打印）",
+    )
     return parser
 
 

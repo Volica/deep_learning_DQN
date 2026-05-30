@@ -12,13 +12,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from DQN.train import build_arg_parser, train_one_run
+from work_model.train import build_arg_parser, train_one_run
 
 
 def main() -> None:
     base_parser = build_arg_parser()
     base_parser.description = __doc__
-    base_parser.set_defaults(output_dir="DQN/runs_lr_sweep")
+    base_parser.set_defaults(output_dir="work_model/runs_lr_sweep")
     base_parser.add_argument(
         "--learning-rates",
         type=float,
