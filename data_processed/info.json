@@ -1,24 +1,29 @@
 {
-  "train_size": 134475,
-  "val_size": 28816,
-  "test_size": 28817,
-  "num_workers": 1796,
+  "perspective": "requester (project-centric)",
+  "train_size": 134678,
+  "val_size": 28860,
+  "test_size": 28860,
+  "num_projects": 2489,
   "max_candidates": 20,
   "history_len": 10,
   "feature_order": [
-    "worker_quality",
-    "worker_history_count",
-    "worker_active_days",
     "project_category",
     "project_sub_category",
     "project_industry",
-    "project_entry_count",
     "project_duration_days",
-    "category_match",
-    "industry_match",
-    "project_popularity",
+    "project_remaining_days",
+    "project_current_entry_count",
+    "project_hist_entry_count",
+    "project_fill_rate",
+    "worker_quality",
+    "worker_history_count",
+    "worker_active_days",
+    "worker_category_match",
+    "worker_industry_match",
     "worker_category_count",
-    "remaining_days"
+    "worker_already_submitted",
+    "worker_recent_activity"
   ],
-  "feature_dim": 13
+  "feature_dim": 16,
+  "reward_hint": "r = positive_worker_quality (main) + diversity_bonus (新 worker) + urgency_bonus (remaining_days 越小奖励越高)"
 }
