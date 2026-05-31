@@ -271,4 +271,38 @@ python 强化学习/env/demo_random.py --split test --reward-type worker
 
 当前环境基于历史日志数据构造，动作不会真正改变后续候选集分布，更接近离线推荐实验而非完全在线交互式强化学习。报告中应明确说明这一点，将结论表述为"在历史候选集上的命中奖励提升"。
 
+### DQN相较于传统的强化学习算法 （Q-learning）的改进：
+
+- 引入深度学习中的神经网络，利用神经网络去拟合Q-learning中的Q表，解决了Q-learning中，当状态维数过高时产生的“维数灾难”问题；
+
+- 固定Q目标网络，利用延后更新的目标网络计算目标Q值，极大的提高了网络训练的稳定性和收敛性；
+
+- 引入经验回放机制，使得在进行网络更新时输入的数据符合独立同分布，打破了数据间的相关性。
+
+### 任务创建时间、到期时间、worker 到达时间如何排序并模拟兴趣和完成情况
+
+**当前状态与下一状态**
+当前状态 `s_t` 应定义为时刻 `t` 的一次推荐决策上下文。  
+参与者视角中，`s_t` 是“当前到达 worker + 当前仍有效的候选 project”的特征矩阵，包括 worker 质量、历史完成数、候选任务类别、行业、热度、剩余时间、类别匹配、行业匹配等。  
+请求者视角中，`s_t` 是“当前 project + 候选 worker”的特征矩阵，包括 project 剩余时间、当前 entry 数、完成率、候选 worker 质量、历史活跃度、是否已提交、类别/行业匹配等。
+
+下一状态 `s_{t+1}` 是数据中下一条按时间排序的交互事件对应的状态。worker 视角中，当前 worker 完成一次真实任务后，会把该 project 加入 `worker_history_at_t`，下一次该 worker 或其他 worker 到达时，历史兴趣和完成记录已经更新。requester 视角中，当前 project 收到一个 worker 的 entry 后，会更新 `project_history_at_t`、`project_current_entry_count` 和 `project_fill_rate`，下一次同一 project 再有 entry 时状态会变化。
+
+**数据分析与特征构造**
+原始数据主要有三类：`project` 文件提供任务类别、子类别、行业、创建时间 `start_date`、截止时间 `deadline`、总 entry 数；`entry` 文件提供 worker 的提交时间 `entry_created_at` 和参与记录；`worker_quality.csv` 提供 worker 历史质量。  
+因此特征应分成四类构造：
+
+1. 任务静态特征：`category`、`sub_category`、`industry`、`duration_days`、历史 `entry_count`。
+2. worker 静态/历史特征：`worker_quality`、`worker_history_count`、`worker_active_days`。
+3. 匹配特征：`category_match`、`industry_match`、`worker_category_count`，用于模拟 worker 对某类任务的兴趣和熟练度。
+4. 动态时间/完成特征：`remaining_days = deadline - 当前 worker 到达时间`、`project_current_entry_count`、`project_fill_rate`、`worker_recent_activity`、`worker_already_submitted`，用于刻画任务紧迫度、完成进度和重复推荐风险。
+
+**时间排序与模拟流程**
+可以这样写得更明确：
+
+先解析每个任务的 `start_date` 和 `deadline`，再解析所有 entry 的 `entry_created_at`，把所有 worker 提交记录按 `entry_created_at` 升序排序。排序后的每条 entry 都被视为一次 worker 到达平台或 project 收到提交的事件。
+
+在 worker 视角，处理时刻 `t` 的事件时，只把满足 `start_date <= t <= deadline` 的 project 放入候选集；实际被该 worker 提交的 project 作为正样本 `positive_project`。模型动作是从候选 project 中推荐一个任务。若动作等于 `positive_index`，说明推荐命中了该 worker 的真实兴趣/完成行为，奖励为 1，否则为 0。事件处理结束后，将该 project 加入该 worker 的历史记录，用于后续计算 `worker_history_count`、`worker_category_count`、类别偏好等。
+
+在 requester 视角，处理时刻 `t` 的事件时，把当前 project 收到的实际提交 worker 作为正样本 `positive_worker`，再从 worker 池中采样负样本构成候选 worker 集。每处理一次 entry，就更新该 project 当前收到的 entry 数、已参与 worker 列表和完成率。这样可以模拟 requester 关心的任务完成情况：剩余时间越少越紧急，当前 entry 数越多完成度越高，推荐未提交过且质量高的 worker 能提升 requester 收益。
 ---
